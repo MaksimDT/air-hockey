@@ -1,0 +1,21 @@
+﻿<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title>AIR HOCKEY!!!</title>
+    <script type="text/javascript">
+        isDebug = true;
+    </script>
+    <script type="text/javascript" src="utils.js"></script>
+    <script type="text/javascript" src="geometry.js"></script>
+    <script type="text/javascript" src="game.js"></script>
+    <script type="text/javascript">
+        window.onload = function () {
+            var gameFieldObj = new GameField(document.getElementById('gameField'), 100);
+            gameFieldObj.start();
+        };
+    </script>
+</head>
+<body>
+    <canvas id="gameField" width="400" height="400"></canvas>
+</body>
+</html>
