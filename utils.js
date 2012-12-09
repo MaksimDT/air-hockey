@@ -1,5 +1,5 @@
 ﻿GlobalConstants = {
-    INFINITY: 100000
+    INFINITY: 100
 };
 
 //GLOBAL FUNCTION.
@@ -99,4 +99,15 @@ if (!Array.prototype.forEach) {
             callbackFn(this[i]);
         }
     }
+}
+
+function almostZero(number, eps) {
+    if (!eps) {
+        eps = 0.0001;
+    }
+    return Math.abs(number) <= eps;
+}
+
+Object.prototype.deepCopy = function () {
+    return $.extend(true, {}, this);
 }

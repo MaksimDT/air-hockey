@@ -21,17 +21,12 @@ GameObject = Class.extend({
     },
     checkAndHandleCollision: function (otherObj) {
         if (this._reactsOnCollisions()) {
-            var collisionInfo = this._geometry.getCollisionInfo(otherObj._geometry);
+            var newVelocity = this._geometry.checkAndHandleCollision({
+                currentVelocity: this._velocity,
+                otherGeometry: otherObj._geometry
+            });
 
-            if (collisionInfo) {
-                collisionInfo.firstObj = this;
-                collisionInfo.secondObj = otherObj;
-            }
-        }
-        else {
-            return {
-                isCollision: false
-            };
+            this._velocity = newVelocity;
         }
     },
     _reactsOnCollisions: function () {
@@ -41,13 +36,21 @@ GameObject = Class.extend({
 
 //CLASS.
 Wall = GameObject.extend({
-    init: function (x1, y1, x2, y2)  {
-        var geometry = new Rect(x1, y1, x2, y2);
-        this._super(geometry, 1);
+    init: function (x1, y1, x2, y2) {
+        var geometry = new LineSegment(new Point(x1, y1), new Point(x2, y2));
+        this._super(geometry);
         this._velocity = new Vector(0, 0);
     },
     onTick: function () {
         //do nothing
+    },
+    draw: function (ctx) {
+        ctx.strokeStyle = 'black';
+        ctx.beginPath();
+        ctx.moveTo(this._geometry.P1.x, this._geometry.P1.y);
+        ctx.lineTo(this._geometry.P2.x, this._geometry.P2.y);
+        ctx.stroke();
+        ctx.closePath();
     }
 });
 
@@ -55,40 +58,54 @@ Wall = GameObject.extend({
 Ball = GameObject.extend({
     init: function (initX, initY) {
         var geometry = new Circle(initX, initY, 30);
-        this._super(geometry, 1);
-        this._velocity = new Vector(10, 10);
+        this._super(geometry);
+        this._velocity = new Vector(20, 3);
     },
     draw: function (ctx) {
-        ctx.fillStyle = 'black';
+        ctx.beginPath();
+        ctx.fillStyle = 'red';
         ctx.arc(this._geometry.x, this._geometry.y, this._geometry.radius, 0, 2 * Math.PI, false);
         ctx.fill();
-    },
-    checkAndHandleCollision: function (otherObj) {
-        var ci = this._super.checkAndHandleCollision(otherObj);
-
-        if (ci) {
-            var bounce = 1;
-            var friction = 1;
-            var newVel = this._geometry.getVelocityAfterCollision(this._velocity, ci.collisionLine, bounce, friction);
-
-            this._velocity = newVel;
-        }
+        ctx.closePath();
     },
     _reactsOnCollisions: function () {
         return true;
     }
 });
 
+Racket = GameObject.extend({
+    init: function (x, yMiddle, height) {
+        var geometry = new LineSegment(new Point(x, yMiddle - height / 2), new Point(x, yMiddle + height / 2));
+        this._super(geometry);
+        this._velocity = new Vector(0, 0);
+    },
+    draw: function (ctx) {
+        var ls = this._geometry;
+
+        ctx.beginPath();
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 5;
+        ctx.moveTo(ls.P1.x, ls.P1.y);
+        ctx.lineTo(ls.P2.x, ls.P2.y);
+        ctx.stroke();
+        ctx.closePath();
+    },
+    _reactsOnCollisions: function () {
+        return false;
+    }
+});
+
 //CLASS. Represents a container for game objects
 GameField = Class.extend({
     init: function (canvas, refreshInterval) {
-        assertIsDefined(boundsArray);
         assertIsDefined(canvas);
+        assertIsDefined(refreshInterval);
 
         //var canvas = Canvas.vsDoc.VSDocCanvasElement;
         this._drawingCtx = canvas.getContext('2d');
         this._width = canvas.width;
         this._height = canvas.height;
+        this._refreshInterval = refreshInterval;
     },
     start: function () {
         var self = this;
@@ -100,7 +117,7 @@ GameField = Class.extend({
 
         //..and reset timer
         self._intervalId = window.setInterval(function () {
-            self.onTick();
+            self._onTick();
         },
         self._refreshInterval);
     },
@@ -113,11 +130,12 @@ GameField = Class.extend({
     _initGameObjects: function () {
         this._gameObjects =
             [
-                new Wall(-GlobalConstants.INFINITY, -GlobalConstants.INFINITY, +GlobalConstants.INFINITY, 0),
-                new Wall(-GlobalConstants.INFINITY, -GlobalConstants.INFINITY, 0, +GlobalConstants.INFINITY),
-                new Wall(-GlobalConstants.INFINITY, +this._height, +GlobalConstants.INFINITY, +GlobalConstants.INFINITY),
-                new Wall(+this._width, -GlobalConstants.INFINITY, +GlobalConstants.INFINITY, +GlobalConstants.INFINITY),
-                new Ball(this._width / 2, this._height / 2)
+                new Wall(0, 0, this._width, 0),
+                new Wall(this._width, 0, this._width, this._height),
+                new Wall(this._width, this._height, 0, this._height),
+                new Wall(0, this._height, 0, 0),
+                new Ball(this._width / 3, this._height / 3),
+                new Racket(this._width - this._width / 3, this._height / 2, 150)
             ];
     },
     _onTick: function () {

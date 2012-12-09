@@ -2,6 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
     <title>AIR HOCKEY!!!</title>
+    <script type="text/javascript" src="jquery.min.js"></script>
     <script type="text/javascript">
         isDebug = true;
     </script>
@@ -10,7 +11,7 @@
     <script type="text/javascript" src="game.js"></script>
     <script type="text/javascript">
         window.onload = function () {
-            var gameFieldObj = new GameField(document.getElementById('gameField'), 100);
+            var gameFieldObj = new GameField(document.getElementById('gameField'), 20);
             gameFieldObj.start();
         };
     </script>
