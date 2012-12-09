@@ -64,6 +64,9 @@ Vector = Point.extend({
     add: function (vect) {
         return new Vector(this.x + vect.x, this.y + vect.y);
     },
+    multiplyByScalar: function (a) {
+        return new Vector(this.x * a, this.y * a);
+    },
     _squaredModulus: function () {
         return this._dotProduct(this);
     },
@@ -128,6 +131,7 @@ CollisionManager = {
                 }
             });
 
+            //HACK: just hack.
             if (collidedSegments.length == 2) {
                 var p1 = collidedSegments[0].getCenter();
                 var p2 = collidedSegments[1].getCenter();
@@ -154,31 +158,52 @@ CollisionManager = {
 
         //find the point closest to the circle's center
         var closestPoint = null;
+        var onLineEdge = false;
 
         if (!proj.looksInSameDirection(AB)) {
             closestPoint = A;
+            onLineEdge = true;
         }
         else if (proj.modulus() < AB.modulus()) {
             //the closest point is the end of projection of AX to AB
             closestPoint = new Point(A.x + proj.x, A.y + proj.y);;
         }
         else {
+            onLineEdge = true;
             closestPoint = B;
         }
 
         if (closestPoint.distanceTo(circle.center()) <= circle.radius) {
-            return new Line(A, B);
+
+            if (onLineEdge) {
+                //HACK (((
+                var l = new Line(closestPoint, circle.center());
+                return l.getOrthogonalLine();
+            }
+            else {
+                return new Line(A, B);
+            }
         }
         else {
             return null;
         }
+    },
+    circleIntersectsCircle: function (c1, c2) {
+        var distanceBtwCenters = c1.center().distanceTo(c2.center());
+
+        if (distanceBtwCenters <= c1.radius + c2.radius) {
+            var lineConnectingCenters = new Line(c1.center(), c2.center());
+            return lineConnectingCenters.getOrthogonalLine();
+        }
+    },
+    lineSegmentIntersectsLineSegment: function (ls1, ls2) {
+
     }
 };
 
 //ABSTRACT CLASS
 AGeometry = Class.extend({
-    init: function (styleInfo) {
-        this._styleInfo = styleInfo;
+    init: function () {
     },
     move: function (vect) {
         this._savePrevPosition();
@@ -202,15 +227,19 @@ AGeometry = Class.extend({
             var v_new_r = v_old_r;
             var v_new_q = v_old_q.turnAround();
 
-            return v_new_r.add(v_new_q);
+            return {
+                isCollision: true,
+                velocity: v_new_r.add(v_new_q)
+            };
         }
         else {
-            return movingCtx.currentVelocity;
+            return {
+                isCollision: false,
+                velocity: movingCtx.currentVelocity
+            };
         }
     },
     _savePrevPosition: function () {
-        this._prev = null;
-        this._prev = this.deepCopy();
     },
     _restorePrevPosition: function () {
     },
@@ -243,6 +272,14 @@ Rect = AGeometry.extend({
     },
     getHeight: function () {
         return this.y2 - this.y1;
+    },
+    _savePrevPosition: function () {
+        this._prev = {
+            x1: this.x1,
+            y1: this.y1,
+            x2: this.x2,
+            y2: this.y2
+        };
     },
     _restorePrevPosition: function () {
         if (this._prev) {
@@ -278,6 +315,13 @@ Circle = AGeometry.extend({
         this.x += vector.x;
         this.y += vector.y;
     },
+    _savePrevPosition: function () {
+        this._prev = {
+            x: this.x,
+            y: this.y,
+            radius: this.radius
+        };
+    },
     _restorePrevPosition: function () {
         if (this._prev) {
             this.x = this._prev.x;
@@ -292,6 +336,9 @@ Circle = AGeometry.extend({
         }
         else if (otherGeometry instanceof LineSegment) {
             return CollisionManager.lineSegmentIntersectsCircle(otherGeometry, this);
+        }
+        else if (otherGeometry instanceof Circle) {
+            return CollisionManager.circleIntersectsCircle(this, otherGeometry);
         }
         else {
             return null;
@@ -319,6 +366,9 @@ LineSegment = AGeometry.extend({
     },
     getCenter: function () {
         return new Point((this.P1.x + this.P2.x) / 2, (this.P1.y + this.P2.y) / 2);
+    },
+    getLength: function () {
+        return this.P1.distanceTo(this.P2);
     },
     _getCollisionLine: function (otherGeometry) {
         assertIsDefined(otherGeometry);

@@ -108,6 +108,8 @@ function almostZero(number, eps) {
     return Math.abs(number) <= eps;
 }
 
-Object.prototype.deepCopy = function () {
-    return $.extend(true, {}, this);
-}
+//this causes some troubles in ripple.js
+
+//Object.prototype.deepCopy = function () {
+//    return $.extend(true, {}, this);
+//}
