@@ -7,32 +7,99 @@
 //CLASS.
 GameObject = Class.extend({
     //CTOR.
-    init: function (geometry) {
+    init: function (geometry, collisionGroups, moveContext) {
         assertIsDefined(geometry);
 
         this._geometry = geometry;
         this._velocity = new Vector(0, 0);
+
+        if (collisionGroups == undefined) {
+            collisionGroups = [0];
+        }
+
+        if (!moveContext) {
+            moveContext = new Object();
+
+            moveContext = {
+                maxVelocity: 10,
+                acceleration: new Vector(0, 0),
+                dampingCoeff: 1.2
+            };
+        }
+
+        if (moveContext.maxVelocity == undefined) {
+            moveContext.maxVelocity = 10;
+        }
+
+        if (moveContext.acceleration == undefined) {
+            moveContext.acceleration = new Vector(0, 0);
+        }
+
+        if (moveContext.dampingCoeff == undefined) {
+            moveContext.dampingCoeff = 1.2;
+        }
+
+        this._collisionGroups = collisionGroups;
+        this._inCollision = false;
+        this._moveContext = moveContext;
     },
     onTick: function () {
+        var acc = this._moveContext.acceleration;
+
+        if (!acc.isZeroVector()) {
+            var newVelocity = this._velocity.add(acc);
+
+            if (newVelocity.modulus() <= this._moveContext.maxVelocity) {
+                this._velocity = newVelocity;
+            }
+        }
+        else {
+            this._velocity = this._velocity.multiplyByScalar(1 / this._moveContext.dampingCoeff);
+        }
+
         this._geometry.move(this._velocity);
     },
     draw: function (ctx) {
         //do nothing
     },
     checkAndHandleCollision: function (otherObj) {
-        if (this._reactsOnCollisions()) {
+        if (this._reactsOnCollisions() && this._colGroupsMatch(otherObj)) {
             var collisionInfo = this._geometry.checkAndHandleCollision({
                 currentVelocity: this._velocity,
                 otherGeometry: otherObj._geometry
             });
 
+            collisionInfo.otherObj = otherObj;
+
             if (collisionInfo.isCollision) {
-                this._velocity = collisionInfo.velocity;
+                this._onCollision(collisionInfo);
                 return true;
             }
         }
 
         return false;
+    },
+    restorePrevPosition: function () {
+        this._geometry.restorePrevPosition();
+    },
+    _colGroupsMatch: function (otherObj) {
+        var cgs1 = this._collisionGroups;
+        var cgs2 = otherObj._collisionGroups;
+
+        var match = false;
+
+        cgs1.forEach(function (cg1) {
+            cgs2.forEach(function (cg2) {
+                if (cg1 == cg2) {
+                    match = true;
+                }
+            });
+        });
+
+        return match;
+    },
+    _onCollision: function (collisionInfo) {
+        this._velocity = collisionInfo.velocity;//.add(collisionInfo.otherObj._velocity.multiplyByScalar(0.2));
     },
     _reactsOnCollisions: function () {
         return false;
@@ -68,7 +135,10 @@ Ball = GameObject.extend({
         assertIsDefined(initVelocity);
 
         var geometry = new Circle(initX, initY, radius);
-        this._super(geometry);
+        this._super(geometry, [0], {
+            dampingCoeff: 1,
+            maxVelocity: 20
+        });
         this._velocity = initVelocity;
     },
     draw: function (ctx) {
@@ -97,7 +167,6 @@ Racket = GameObject.extend({
         this._super(geometry);
         this._velocity = new Vector(0, 0);
         this._ball = ball;
-        this._inCollision = false;
     },
     onTick: function () {
         this._super();
@@ -116,18 +185,23 @@ Racket = GameObject.extend({
         ctx.stroke();
         ctx.closePath();
     },
-    checkAndHandleCollision: function (otherObj) {
-        this._isCollision = this._super(otherObj);
-        return this._isCollision;
+    _onCollision: function (collisionInfo) {
+        this._velocity.y = collisionInfo.velocity.y;
     },
     _trackBall: function () {
         var ballCenter = this._ball.getCenterCoords();
+        var needToTrack = ballCenter.x < this._getX();
 
-        if (this._getCenterY() - ballCenter.y > this._getLength() / 3) {
-            this._goUp();
-        }
-        else if (ballCenter.y - this._getCenterY() > this._getLength() / 3) {
-            this._goDown();
+        if (needToTrack) {
+            if (this._getCenterY() - ballCenter.y > this._getLength() / 3) {
+                this._goUp();
+            }
+            else if (ballCenter.y - this._getCenterY() > this._getLength() / 3) {
+                this._goDown();
+            }
+            else {
+                this._stop();
+            }
         }
         else {
             this._stop();
@@ -141,21 +215,19 @@ Racket = GameObject.extend({
     },
     //TODO: magic numbers detected. Hacks detected too
     _goUp: function () {
-        this._velocity.y = -7;
+        this._moveContext.dampingCoeff = 1;
+        this._moveContext.acceleration.y = -3;
     },
     _goDown: function () {
-        this._velocity.y = 7;
+        this._moveContext.dampingCoeff = 1;
+        this._moveContext.acceleration.y = 3;
+    },
+    _getX: function () {
+        return this._geometry.P1.x;
     },
     _stop: function () {
-        var vel = this._velocity.y;
-
-        vel /= 1.05;
-
-        if (Math.abs(vel) < 1) {
-            vel = 0;
-        }
-
-        this._velocity.y = vel;
+        this._moveContext.acceleration.y = 0;
+        this._moveContext.dampingCoeff = 10;
     },
     _reactsOnCollisions: function () {
         return true;
@@ -165,23 +237,10 @@ Racket = GameObject.extend({
 Mallet = GameObject.extend({
     init: function (initX, initY, radius) {
         var geometry = new Circle(initX, initY, radius);
-        this._super(geometry);
+        this._super(geometry, [0, 1], {
+            maxVelocity: 20
+        });
         this._velocity = new Vector(0, 0);
-
-        this._acceleration = null;
-    },
-    onTick: function () {
-        this._super();
-
-        if (this._acceleration) {
-            if (this._velocity.modulus() <= 15) {
-                this._velocity = this._velocity.add(this._acceleration);
-            }
-            this._acceleration = null;
-        }
-        else {
-            this._velocity = this._velocity.multiplyByScalar(0.5);
-        }
     },
     draw: function (ctx) {
         ctx.beginPath();
@@ -191,10 +250,25 @@ Mallet = GameObject.extend({
         ctx.closePath();
     },
     accelerate: function (vect) {
-        this._acceleration = vect.multiplyByScalar(1 / vect.modulus());
+        this._moveContext.acceleration = vect;
+    },
+    _onCollision: function (collisionInfo) {
+        this._moveContext.acceleration.x = 0;
+        this._moveContext.acceleration.y = 0;
+        this._super(collisionInfo);
     },
     _reactsOnCollisions: function () {
         return true;
+    }
+});
+
+SeparatingWall = GameObject.extend({
+    init: function (x, height) {
+        var geometry = new LineSegment(new Point(x, 0), new Point(x, height));
+        this._super(geometry, [1]);
+        this._velocity = new Vector(0, 0);
+    },
+    onTick: function () {
     }
 });
 
@@ -212,46 +286,21 @@ UserInputController = Class.extend({
         this._pressedBtns["D"] = false;
         this._pressedBtns["S"] = false;
         this._pressedBtns["A"] = false;
+
+        this._ticksPressed = 0;
     },
     startTracking: function () {
         var self = this;
 
         document.onkeydown = function (event) {
             self._refreshPressedBtnsArray(event.keyCode, 'keydown');
-
-            var directionX = 0;
-            var directionY = 0;
-
-            if (self._pressedBtns["W"]) {
-                directionY -= 1;
-            }
-
-            if (self._pressedBtns["D"]) {
-                directionX += 1;
-            }
-
-            if (self._pressedBtns["S"]) {
-                directionY += 1;
-            }
-
-            if (self._pressedBtns["A"]) {
-                directionX -= 1;
-            }
-
-            self._mallet.accelerate(new Vector(directionX, directionY));
+            self._mallet.accelerate(self._getMalletDirection());
         }
 
         document.onkeyup = function (event) {
             self._refreshPressedBtnsArray(event.keyCode, 'keyup');
-        }
-
-        //this._canvas.onmousemove = function (event) {
-        //    if (self._prevMousePos) {
-        //        var directionVector = new Vector(event.x - self._prevMousePos.x, event.y - self._prevMousePos.y);
-        //        self._mallet.accelerate(directionVector);
-        //    }
-        //    self._prevMousePos = new Point(event.x, event.y);
-        //};
+            self._mallet.accelerate(self._getMalletDirection());
+        };
     },
     stopTracking: function () {
         document.onkeydown = undefined;
@@ -283,6 +332,28 @@ UserInputController = Class.extend({
                 this._pressedBtns[chr] = false;
             }
         }
+    },
+    _getMalletDirection: function () {
+        var directionX = 0;
+        var directionY = 0;
+
+        if (this._pressedBtns["W"]) {
+            directionY -= 1;
+        }
+
+        if (this._pressedBtns["D"]) {
+            directionX += 1;
+        }
+
+        if (this._pressedBtns["S"]) {
+            directionY += 1;
+        }
+
+        if (this._pressedBtns["A"]) {
+            directionX -= 1;
+        }
+
+        return new Vector(directionX, directionY);
     }
 });
 
@@ -337,8 +408,10 @@ GameField = Class.extend({
                 ball,
                 mallet,
                 new Racket(this._width - this._width / 3, this._height / 2, this._height / 2, ball)
+                //new SeparatingWall(this._width / 2, this._height)
             ];
 
+        //TODO:
         this._controller = new UserInputController(mallet, this._canvas);
     },
     _onTick: function () {
@@ -364,11 +437,25 @@ GameField = Class.extend({
     _processCollisions: function () {
         var self = this;
         self._gameObjects.forEach(function (go1) {
+            var inCollision = false;
+
             self._gameObjects.forEach(function (go2) {
                 if (go1 != go2) {
-                    go1.checkAndHandleCollision(go2);
+                    var res = go1.checkAndHandleCollision(go2);
+                    if (res) {
+                        inCollision = true;
+                    }
                 }
             });
+
+            go1._inCollision = inCollision;
+        });
+
+        self._gameObjects.forEach(function (go) {
+            if (go._inCollision) {
+                go.restorePrevPosition();
+            }
+            go._inCollision = false;
         });
     }
 });

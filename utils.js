@@ -108,6 +108,66 @@ function almostZero(number, eps) {
     return Math.abs(number) <= eps;
 }
 
+//CLASS. Implements a LIFO container with limited capacity
+Stack = Class.extend({
+    init: function (capacity) {
+        if (!capacity) {
+            capacity = 10;
+        }
+
+        this._capacity = capacity;
+        this._itemsCount = 0;
+
+        var dummy = {
+            next: null,
+            prev: null,
+            data: null
+        };
+
+        this._listHead = dummy;
+        this._listTail = dummy;
+    },
+    push: function (item) {
+        assertIsDefined(item);
+
+        if (this._itemsCount == this._capacity) {
+            /*the stack is full, let's remove the last item (actually, the last item 
+            is the dummy one, so we skip it and delete the last "real" item)*/
+            var dummy = this._listTrail;
+            var lastRealItem = dummy.prev;
+            assert(lastRealItem != null);
+            lastRealItem.next = dummy;
+        }
+
+        //inserting the new item to the list's head
+        var newItem = {
+            next: this._listHead,
+            prev: null,
+            data: item
+        };
+
+        this._listHead.prev = newItem;
+        this._listHead = newItem;
+
+        this._itemsCount++;
+    },
+    pop: function () {
+        if (this._itemsCount != 0) {
+            var node = this._listHead;
+
+            this._listHead = this._listHead.next;
+            this._listHead.prev = null;
+
+            this._itemsCount--;
+
+            return node.data;
+        }
+        else {
+            return null;
+        }
+    }
+});
+
 //this causes some troubles in ripple.js
 
 //Object.prototype.deepCopy = function () {

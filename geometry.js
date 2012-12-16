@@ -67,6 +67,9 @@ Vector = Point.extend({
     multiplyByScalar: function (a) {
         return new Vector(this.x * a, this.y * a);
     },
+    isZeroVector: function () {
+        return almostZero(this.x, 0.0001) && almostZero(this.y, 0.0001);
+    },
     _squaredModulus: function () {
         return this._dotProduct(this);
     },
@@ -201,9 +204,23 @@ CollisionManager = {
     }
 };
 
+PositionsHistory = Class.extend({
+    init: function () {
+        this._storage = new Stack(10);
+    },
+    savePosition: function (pos) {
+        this._storage.push(pos);
+    },
+    getLastPosition: function () {
+        return this._storage.pop();
+    }
+});
+
 //ABSTRACT CLASS
 AGeometry = Class.extend({
     init: function () {
+        this._positionsHistory = new PositionsHistory();
+        this._prevPosition = null;
     },
     move: function (vect) {
         this._savePrevPosition();
@@ -216,9 +233,6 @@ AGeometry = Class.extend({
         var cl = this._getCollisionLine(movingCtx.otherGeometry);
 
         if (cl) {
-            //there is a collision. Let's rollback to previous position
-            this._restorePrevPosition();
-
             var r = cl;
             var q = cl.getOrthogonalLine();
 
@@ -240,8 +254,17 @@ AGeometry = Class.extend({
         }
     },
     _savePrevPosition: function () {
+        var pos = this._getPositionInfo();
+
+        if (pos != null) {
+            //this._positionsHistory.savePosition();
+            this._prevPosition = pos;
+        }
     },
-    _restorePrevPosition: function () {
+    restorePrevPosition: function () {
+    },
+    _getPositionInfo: function () {
+        return null;
     },
     _getCollisionLine: function (otherGeometry) {
         return null;
@@ -252,6 +275,7 @@ AGeometry = Class.extend({
 Rect = AGeometry.extend({
     //CTOR.
     init: function (x1, y1, x2, y2) {
+        this._super();
         this.x1 = x1;
         this.y1 = y1;
         this.x2 = x2;
@@ -273,20 +297,23 @@ Rect = AGeometry.extend({
     getHeight: function () {
         return this.y2 - this.y1;
     },
-    _savePrevPosition: function () {
-        this._prev = {
+    _getPositionInfo: function () {
+        return {
             x1: this.x1,
             y1: this.y1,
             x2: this.x2,
             y2: this.y2
         };
     },
-    _restorePrevPosition: function () {
-        if (this._prev) {
-            this.x1 = this._prev.x1;
-            this.y1 = this._prev.y1;
-            this.x2 = this._prev.x2;
-            this.y2 = this._prev.y2;
+    restorePrevPosition: function () {
+        //var pos = this._positionsHistory.getLastPosition();
+        var pos = this._prevPosition;
+
+        if (pos != null) {
+            this.x1 = pos.x1;
+            this.y1 = pos.y1;
+            this.x2 = pos.x2;
+            this.y2 = pos.y2;
         }
     },
     _getCollisionLine: function (otherGeometry) {
@@ -303,6 +330,7 @@ Rect = AGeometry.extend({
 Circle = AGeometry.extend({
     //CTOR.
     init: function (x, y, radius) {
+        this._super();
         this.x = x;
         this.y = y;
         this.radius = radius;
@@ -315,18 +343,16 @@ Circle = AGeometry.extend({
         this.x += vector.x;
         this.y += vector.y;
     },
-    _savePrevPosition: function () {
-        this._prev = {
+    _getPositionInfo: function () {
+        return {
             x: this.x,
-            y: this.y,
-            radius: this.radius
+            y: this.y
         };
     },
-    _restorePrevPosition: function () {
-        if (this._prev) {
-            this.x = this._prev.x;
-            this.y = this._prev.y;
-            this.radius = this._prev.radius;
+    restorePrevPosition: function () {
+        if (this._prevPosition) {
+            this.x = this._prevPosition.x;
+            this.y = this._prevPosition.y;
         }
     },
     _getCollisionLine: function (otherGeometry) {
@@ -353,6 +379,7 @@ LineSegment = AGeometry.extend({
         assertIsDefined(P1);
         assertIsDefined(P2);
 
+        this._super();
         this.P1 = P1;
         this.P2 = P2;
     },
@@ -369,6 +396,25 @@ LineSegment = AGeometry.extend({
     },
     getLength: function () {
         return this.P1.distanceTo(this.P2);
+    },
+    _getPositionInfo: function () {
+        return {
+            x1: this.P1.x,
+            y1: this.P1.y,
+            x2: this.P2.x,
+            y2: this.P2.y
+        };
+    },
+    restorePrevPosition: function () {
+        //var pos = this._positionsHistory.getLastPosition();
+        var pos = this._prevPosition;
+
+        if (pos != null) {
+            this.P1.x = pos.x1;
+            this.P1.y = pos.y1;
+            this.P2.x = pos.x2;
+            this.P2.y = pos.y2;
+        }
     },
     _getCollisionLine: function (otherGeometry) {
         assertIsDefined(otherGeometry);
