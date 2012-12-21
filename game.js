@@ -40,7 +40,6 @@ GameObject = Class.extend({
         }
 
         this._collisionGroups = collisionGroups;
-        this._inCollision = false;
         this._moveContext = moveContext;
     },
     onTick: function () {
@@ -170,8 +169,11 @@ Racket = GameObject.extend({
     },
     onTick: function () {
         this._super();
-        if (!this._inCollision) {
+        if (!this.inCollision) {
             this._trackBall();
+        }
+        else {
+            this._stop();
         }
     },
     draw: function (ctx) {
@@ -253,8 +255,6 @@ Mallet = GameObject.extend({
         this._moveContext.acceleration = vect;
     },
     _onCollision: function (collisionInfo) {
-        this._moveContext.acceleration.x = 0;
-        this._moveContext.acceleration.y = 0;
         this._super(collisionInfo);
     },
     _reactsOnCollisions: function () {
@@ -397,7 +397,7 @@ GameField = Class.extend({
     },
     _initGameObjects: function () {
         var ball = new Ball(this._width / 3, this._height / 3, this._height / 30, new Vector(15, 1));
-        var mallet = new Mallet(this._width / 3, this._height / 2, this._height / 15);
+        var mallet = new Mallet(this._width / 3, this._height / 2, this._height / 10);
 
         this._gameObjects =
             [
@@ -436,26 +436,27 @@ GameField = Class.extend({
     },
     _processCollisions: function () {
         var self = this;
-        self._gameObjects.forEach(function (go1) {
-            var inCollision = false;
 
+        self._gameObjects.forEach(function (go) {
+            go.inCollision = false;
+        });
+
+        self._gameObjects.forEach(function (go1) {
             self._gameObjects.forEach(function (go2) {
                 if (go1 != go2) {
                     var res = go1.checkAndHandleCollision(go2);
                     if (res) {
-                        inCollision = true;
+                        go1.inCollision = true;
+                        go2.inCollision = true;
                     }
                 }
             });
-
-            go1._inCollision = inCollision;
         });
 
         self._gameObjects.forEach(function (go) {
-            if (go._inCollision) {
+            if (go.inCollision) {
                 go.restorePrevPosition();
             }
-            go._inCollision = false;
         });
     }
 });

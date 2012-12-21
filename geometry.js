@@ -68,7 +68,7 @@ Vector = Point.extend({
         return new Vector(this.x * a, this.y * a);
     },
     isZeroVector: function () {
-        return almostZero(this.x, 0.0001) && almostZero(this.y, 0.0001);
+        return almostZero(this.x) && almostZero(this.y);
     },
     _squaredModulus: function () {
         return this._dotProduct(this);
@@ -286,6 +286,8 @@ Rect = AGeometry.extend({
         return (this.x1 <= point.x && point.x <= this.x2) && (this.y1 <= point.y && point.y <= this.y2);
     },
     move: function (vect) {
+        this._super(vect);
+
         this.x1 += vect.x;
         this.y1 += vect.y;
         this.x2 += vect.x;
