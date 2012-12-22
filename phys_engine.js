@@ -98,55 +98,52 @@ Line = Class.extend({
     }
 });
 
-//STATIC CLASS. Contains the logic of collision detection
+//STATIC CLASS. Contains the logic of collision detection and standard collision handling mechanisms
 CollisionManager = {
-    rectIntersectsCircle: function (rect, circle) {
-        var self = this;
+    getCollisionInfo: function (objInfo1, objInfo2) {
+        var geom1 = objInfo1.geometry;
+        var geom2 = objInfo2.geometry;
 
-        //rectangle intersects circle in two cases:
-        //1) the circle's center is inside the rectangle
-        //2) at least one of rectangle's edges intersects the circle
+        var cl;
 
-        //checking 1)
-        if (rect.isPointInside(circle.center())) {
-            //TODO: WTF???
-            return new Line(new Point(rect.x1, rect.y1), new Point(rect.x1, rect.y2));
+        if (geom1 instanceof Circle && geom2 instanceof LineSegment ||
+            geom2 instanceof Circle && geom1 instanceof LineSegment) {
+
+            var lineSegment = geom1 instanceof LineSegment ? geom1 : geom2;
+            var circle = geom2 instanceof Circle ? geom2 : geom1;
+
+            cl = this.getCollisionLine_linesegment_circle(lineSegment, circle);
+        }
+        else if (geom1 instanceof Circle && geom2 instanceof Circle) {
+            cl = this.getCollisionLine_circle_circle(geom1, geom2);
+        }
+        else if (geom1 instanceof LineSegment && geom2 instanceof LineSegment) {
+            //TODO: implement
         }
         else {
-            //checking 2)
-            var lineSegments = [
-                new LineSegment(new Point(rect.x1, rect.y1), new Point(rect.x1, rect.y2)),
-                new LineSegment(new Point(rect.x1, rect.y2), new Point(rect.x2, rect.y2)),
-                new LineSegment(new Point(rect.x2, rect.y2), new Point(rect.x2, rect.y1)),
-                new LineSegment(new Point(rect.x2, rect.y1), new Point(rect.x1, rect.y1))
-            ];
+            throw new Error("No collision detection logic found for types of the objects specified");
+        }
 
-            //assume that there's no collision
-            var collisionLine = null;
-            var collidedSegments = [];
+        if (cl) {
+            /*breaking down velocities of the objects into the two compontents: 
+            first that is parallel to collision line (axis "r") and second that is orthogonal to it (axis "q")*/
+            var r = cl;
+            var q = cl.getOrthogonalLine();
 
-            //...and check for collision with every rectangle's edge
-            lineSegments.forEach(function (lineSeg) {
-                var cl = self.lineSegmentIntersectsCircle(lineSeg, circle);
-                if (cl) {
-                    collisionLine = cl;
-                    collidedSegments.push(lineSeg);
+            return {
+                objInfo1: {
+                    velocity: objInfo1.velocity.projectOnLine(r).add( objInfo1.velocity.projectOnLine(q).turnAround() )
+                },
+                objInfo2: {
+                    velocity: objInfo2.velocity.projectOnLine(r).add( objInfo2.velocity.projectOnLine(q).turnAround() )
                 }
-            });
-
-            //HACK: just hack.
-            if (collidedSegments.length == 2) {
-                var p1 = collidedSegments[0].getCenter();
-                var p2 = collidedSegments[1].getCenter();
-
-                return new Line(p1, p2);
-            }
-            else {
-                return collisionLine;
-            }
+            };
+        }
+        else {
+            return null;
         }
     },
-    lineSegmentIntersectsCircle: function (lineSegment, circle) {
+    getCollisionLine_linesegment_circle: function (lineSegment, circle) {
         //1) find the closest point to the circle on the segment
         
         //find the projection of AX on AB, where X is the circle's center
@@ -179,7 +176,6 @@ CollisionManager = {
         if (closestPoint.distanceTo(circle.center()) <= circle.radius) {
 
             if (onLineEdge) {
-                //HACK (((
                 var l = new Line(closestPoint, circle.center());
                 return l.getOrthogonalLine();
             }
@@ -191,7 +187,7 @@ CollisionManager = {
             return null;
         }
     },
-    circleIntersectsCircle: function (c1, c2) {
+    getCollisionLine_circle_circle: function (c1, c2) {
         var distanceBtwCenters = c1.center().distanceTo(c2.center());
 
         if (distanceBtwCenters <= c1.radius + c2.radius) {
@@ -225,106 +221,25 @@ AGeometry = Class.extend({
     move: function (vect) {
         this._savePrevPosition();
     },
-    checkAndHandleCollision: function (movingCtx) {
-        assertIsDefined(movingCtx);
-        assertIsDefined(movingCtx.currentVelocity);
-        assertIsDefined(movingCtx.otherGeometry);
-
-        var cl = this._getCollisionLine(movingCtx.otherGeometry);
-
-        if (cl) {
-            var r = cl;
-            var q = cl.getOrthogonalLine();
-
-            var v_old_r = movingCtx.currentVelocity.projectOnLine(r);
-            var v_old_q = movingCtx.currentVelocity.projectOnLine(q);
-            var v_new_r = v_old_r;
-            var v_new_q = v_old_q.turnAround();
-
-            return {
-                isCollision: true,
-                velocity: v_new_r.add(v_new_q)
-            };
-        }
-        else {
-            return {
-                isCollision: false,
-                velocity: movingCtx.currentVelocity
-            };
-        }
-    },
     _savePrevPosition: function () {
-        var pos = this._getPositionInfo();
+        var pos = this._getCurrentPositionInfo();
 
         if (pos != null) {
-            //this._positionsHistory.savePosition();
-            this._prevPosition = pos;
+            this._positionsHistory.savePosition(pos);
+            //this._prevPosition = pos;
         }
     },
     restorePrevPosition: function () {
+
     },
-    _getPositionInfo: function () {
+    _getCurrentPositionInfo: function () {
         return null;
+    },
+    _getPrevPositionInfo: function () {
+        return this._positionsHistory.getLastPosition();
     },
     _getCollisionLine: function (otherGeometry) {
         return null;
-    }
-});
-
-//CLASS. Represents a rectangle which left top and right bottom corners are in (x1, y1) and (x2, y2) respectively
-Rect = AGeometry.extend({
-    //CTOR.
-    init: function (x1, y1, x2, y2) {
-        this._super();
-        this.x1 = x1;
-        this.y1 = y1;
-        this.x2 = x2;
-        this.y2 = y2;
-    },
-    //METHOD. Determines whether the specified point is inside the rectangle
-    isPointInside: function (point) {
-        return (this.x1 <= point.x && point.x <= this.x2) && (this.y1 <= point.y && point.y <= this.y2);
-    },
-    move: function (vect) {
-        this._super(vect);
-
-        this.x1 += vect.x;
-        this.y1 += vect.y;
-        this.x2 += vect.x;
-        this.y2 += vect.y;
-    },
-    getWidth: function () {
-        return this.x2 - this.x1;
-    },
-    getHeight: function () {
-        return this.y2 - this.y1;
-    },
-    _getPositionInfo: function () {
-        return {
-            x1: this.x1,
-            y1: this.y1,
-            x2: this.x2,
-            y2: this.y2
-        };
-    },
-    restorePrevPosition: function () {
-        //var pos = this._positionsHistory.getLastPosition();
-        var pos = this._prevPosition;
-
-        if (pos != null) {
-            this.x1 = pos.x1;
-            this.y1 = pos.y1;
-            this.x2 = pos.x2;
-            this.y2 = pos.y2;
-        }
-    },
-    _getCollisionLine: function (otherGeometry) {
-        if (otherGeometry instanceof Circle) {
-            return CollisionManager.rectIntersectsCircle(this, otherGeometry);
-        }
-        else {
-            return null;
-        }
     }
 });
 
@@ -345,31 +260,18 @@ Circle = AGeometry.extend({
         this.x += vector.x;
         this.y += vector.y;
     },
-    _getPositionInfo: function () {
+    _getCurrentPositionInfo: function () {
         return {
             x: this.x,
             y: this.y
         };
     },
     restorePrevPosition: function () {
-        if (this._prevPosition) {
-            this.x = this._prevPosition.x;
-            this.y = this._prevPosition.y;
-        }
-    },
-    _getCollisionLine: function (otherGeometry) {
-        assertIsDefined(otherGeometry);
-        if (otherGeometry instanceof Rect) {
-            return CollisionManager.rectIntersectsCircle(otherGeometry, this);
-        }
-        else if (otherGeometry instanceof LineSegment) {
-            return CollisionManager.lineSegmentIntersectsCircle(otherGeometry, this);
-        }
-        else if (otherGeometry instanceof Circle) {
-            return CollisionManager.circleIntersectsCircle(this, otherGeometry);
-        }
-        else {
-            return null;
+        var pos = this._getPrevPositionInfo();
+
+        if (pos) {
+            this.x = pos.x;
+            this.y = pos.y;
         }
     }
 });
@@ -399,7 +301,7 @@ LineSegment = AGeometry.extend({
     getLength: function () {
         return this.P1.distanceTo(this.P2);
     },
-    _getPositionInfo: function () {
+    _getCurrentPositionInfo: function () {
         return {
             x1: this.P1.x,
             y1: this.P1.y,
@@ -408,23 +310,14 @@ LineSegment = AGeometry.extend({
         };
     },
     restorePrevPosition: function () {
-        //var pos = this._positionsHistory.getLastPosition();
-        var pos = this._prevPosition;
+        var pos = this._getPrevPositionInfo();
+        //var pos = this._prevPosition;
 
         if (pos != null) {
             this.P1.x = pos.x1;
             this.P1.y = pos.y1;
             this.P2.x = pos.x2;
             this.P2.y = pos.y2;
-        }
-    },
-    _getCollisionLine: function (otherGeometry) {
-        assertIsDefined(otherGeometry);
-        if (otherGeometry instanceof Circle) {
-            return CollisionManager.lineSegmentIntersectsCircle(this, otherGeometry);
-        }
-        else {
-            return null;
         }
     }
 });

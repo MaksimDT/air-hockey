@@ -133,10 +133,11 @@ Stack = Class.extend({
         if (this._itemsCount == this._capacity) {
             /*the stack is full, let's remove the last item (actually, the last item 
             is the dummy one, so we skip it and delete the last "real" item)*/
-            var dummy = this._listTrail;
+            var dummy = this._listTail;
             var lastRealItem = dummy.prev;
             assert(lastRealItem != null);
             lastRealItem.next = dummy;
+            this._itemsCount--;
         }
 
         //inserting the new item to the list's head

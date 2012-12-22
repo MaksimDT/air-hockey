@@ -1,5 +1,5 @@
 ﻿/// <reference path="utils.js" />
-/// <reference path="geometry.js" />
+/// <reference path="phys_engine.js" />
 /// <reference path="canvas-vsdoc.js" />
 
 //==========================GAME OBJECTS========================
@@ -61,22 +61,8 @@ GameObject = Class.extend({
     draw: function (ctx) {
         //do nothing
     },
-    checkAndHandleCollision: function (otherObj) {
-        if (this._reactsOnCollisions() && this._colGroupsMatch(otherObj)) {
-            var collisionInfo = this._geometry.checkAndHandleCollision({
-                currentVelocity: this._velocity,
-                otherGeometry: otherObj._geometry
-            });
-
-            collisionInfo.otherObj = otherObj;
-
-            if (collisionInfo.isCollision) {
-                this._onCollision(collisionInfo);
-                return true;
-            }
-        }
-
-        return false;
+    needCollisionHandling: function(otherObj) {
+        return this._reactsOnCollisions() && this._colGroupsMatch(otherObj);
     },
     restorePrevPosition: function () {
         this._geometry.restorePrevPosition();
@@ -443,9 +429,24 @@ GameField = Class.extend({
 
         self._gameObjects.forEach(function (go1) {
             self._gameObjects.forEach(function (go2) {
-                if (go1 != go2) {
-                    var res = go1.checkAndHandleCollision(go2);
-                    if (res) {
+                if (go1 != go2 && !(go1.inCollision && go2.inCollision) && (go1.needCollisionHandling(go2) || go2.needCollisionHandling(go1))) {
+                    var ci = CollisionManager.getCollisionInfo(
+                        {
+                            geometry: go1._geometry,
+                            velocity: go1._velocity
+                        },
+                        {
+                            geometry: go2._geometry,
+                            velocity: go2._velocity
+                        });
+                    
+                    if (ci != null) {
+                        go1._onCollision({
+                            velocity: ci.objInfo1.velocity
+                        });
+                        go2._onCollision({
+                            velocity: ci.objInfo2.velocity
+                        });
                         go1.inCollision = true;
                         go2.inCollision = true;
                     }
