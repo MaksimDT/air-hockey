@@ -122,15 +122,15 @@ Wall = GameObject.extend({
     },
     onTick: function () {
         //do nothing
-    },
-    draw: function (ctx) {
-        ctx.strokeStyle = 'black';
-        ctx.beginPath();
-        ctx.moveTo(this._geometry.P1.x, this._geometry.P1.y);
-        ctx.lineTo(this._geometry.P2.x, this._geometry.P2.y);
-        ctx.stroke();
-        ctx.closePath();
     }
+    //draw: function (ctx) {
+    //    ctx.strokeStyle = 'black';
+    //    ctx.beginPath();
+    //    ctx.moveTo(this._geometry.P1.x, this._geometry.P1.y);
+    //    ctx.lineTo(this._geometry.P2.x, this._geometry.P2.y);
+    //    ctx.stroke();
+    //    ctx.closePath();
+    //}
 });
 
 //CLASS.
@@ -164,16 +164,18 @@ Ball = GameObject.extend({
 });
 
 Racket = GameObject.extend({
-    init: function (x, yMiddle, height, ball) {
+    init: function (x, yMiddle, height, ball, visibleWidth) {
         assertIsDefined(x);
         assertIsDefined(yMiddle);
         assertIsDefined(height);
         assertIsDefined(ball);
+        assertIsDefined(visibleWidth);
 
         var geometry = new LineSegment(new Point(x, yMiddle - height / 2), new Point(x, yMiddle + height / 2));
         this._super(geometry);
         this._velocity = new Vector(0, 0);
         this._ball = ball;
+        this._visibleWidth = visibleWidth;
 
         this._img = new Image();
         this._img.src = 'racket.png';
@@ -232,7 +234,7 @@ Racket = GameObject.extend({
         return this._geometry.P1.x;
     },
     _getVisibleWidth: function () {
-        return 10;
+        return this._visibleWidth;
     },
     _stop: function () {
         this._moveContext.acceleration.y = 0;
@@ -417,7 +419,7 @@ GameField = Class.extend({
         var mallet = new Mallet(this._width / 3, this._height / 2, this._height / 10, {
             maxVelocity: ballRadius / 5
         });
-        var racket = new Racket(this._width - this._width / 3, this._height / 2, this._height / 2, ball);
+        var racket = new Racket(this._width - this._width / 3, this._height / 2, this._height / 2, ball, ballRadius / 2);
 
         this._gameObjects =
             [
