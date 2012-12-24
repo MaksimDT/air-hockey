@@ -10,6 +10,9 @@ Point = Class.extend({
     },
     distanceTo: function (otherPoint) {
         return Math.sqrt((this.x - otherPoint.x) * (this.x - otherPoint.x) + (this.y - otherPoint.y) * (this.y - otherPoint.y));
+    },
+    addVector: function (vect) {
+        return new Point(this.x + vect.x, this.y + vect.y);
     }
 });
 
@@ -70,6 +73,17 @@ Vector = Point.extend({
     isZeroVector: function () {
         return almostZero(this.x) && almostZero(this.y);
     },
+    scaleTo: function (targetModulus) {
+        if (almostZero(this.modulus())) {
+            return new Vector(0, 0);
+        }
+        else if (targetModulus > 0) {
+            return this.multiplyByScalar(targetModulus / this.modulus());
+        }
+        else {
+            return this.multiplyByScalar(-targetModulus / this.modulus()).turnAround();
+        }
+    },
     _squaredModulus: function () {
         return this._dotProduct(this);
     },
@@ -78,14 +92,17 @@ Vector = Point.extend({
         return this.x * vect.x + this.y * vect.y;
     }
 });
+Vector.fromTwoPoints = function (P1, P2) {
+    return new Vector(P2.x - P1.x, P2.y - P1.y);
+}
 
 //CLASS
 Line = Class.extend({
     init: function (P1, P2) {
         assertIsDefined(P1);
         assertIsDefined(P2);
-        this.P1 = P1;
-        this.P2 = P2;
+        this.setP1(P1);
+        this.setP2(P2);
     },
     getCollinearVector: function () {
         return new Vector(this.P2.x - this.P1.x, this.P2.y - this.P1.y);
@@ -95,7 +112,67 @@ Line = Class.extend({
         var w = v.getOrthogonalVector();
         
         return new Line(new Point(0, 0), new Point(w.x, w.y));
+    },
+    getOrthogonalVector: function () {
+        return this.getCollinearVector().getOrthogonalVector();
+    },
+    getDistanceToPoint: function (p) {
+        var A = this._getA();
+        var B = this._getB();
+        var C = this._getC();
+        var x = p.x;
+        var y = p.y;
+
+        return Math.abs(A * x + B * y + C) / Math.sqrt(A * A + B * B);
+    },
+    getParallelPassingThroughPoint: function (p) {
+        assertIsDefined(p);
+        assert(p instanceof Point);
+
+        var moveVect = Vector.fromTwoPoints(this.P1, p);
+        
+        return new Line(this.P1.addVector(moveVect), this.P2.addVector(moveVect));
+    },
+    setP1: function (P1) {
+        assertIsDefined(P1);
+        assert(P1 instanceof Point);
+        this.P1 = P1;
+        this._resetCache();
+    },
+    setP2: function (P2) {
+        assertIsDefined(P2);
+        assert(P2 instanceof Point);
+        this.P2 = P2;
+        this._resetCache();
+    },
+    _getA: function () {
+        if (this._a == undefined) {
+            this._a = this.P1.y - this.P2.y;
+        }
+        return this._a;
+    },
+    _getB: function () {
+        if (this._b == undefined) {
+            this._b = this.P2.x - this.P1.x;
+        }
+        return this._b;
+    },
+    _getC: function () {
+        if (this._c == undefined) {
+            var x1 = this.P1.x;
+            var x2 = this.P2.x;
+            var y1 = this.P1.y;
+            var y2 = this.P2.y;
+            this._c = x1 * (y2 - y1) - y1 * (x2 - x1);
+        }
+        return this._c;
+    },
+    _resetCache: function () {
+        this._a = undefined;
+        this._b = undefined;
+        this._c = undefined;
     }
+
 });
 
 //STATIC CLASS. Contains the logic of collision detection and standard collision handling mechanisms
@@ -105,6 +182,8 @@ CollisionManager = {
         var geom2 = objInfo2.geometry;
 
         var cl;
+        var fallbackVector1;
+        var fallbackVector2;
 
         if (geom1 instanceof Circle && geom2 instanceof LineSegment ||
             geom2 instanceof Circle && geom1 instanceof LineSegment) {
@@ -113,31 +192,94 @@ CollisionManager = {
             var circle = geom2 instanceof Circle ? geom2 : geom1;
 
             cl = this.getCollisionLine_linesegment_circle(lineSegment, circle);
+
+            if (cl) {
+                var collisionDepth = circle.radius - cl.getDistanceToPoint(circle.center());
+
+                var fallbackVector = cl.getOrthogonalVector().scaleTo(collisionDepth + 1);
+
+                if (cl.getDistanceToPoint(circle.center()) > cl.getDistanceToPoint(circle.center().addVector(fallbackVector))) {
+                    fallbackVector = fallbackVector.turnAround();
+                }
+                
+
+                if (geom1 instanceof Circle) {
+                    fallbackVector1 = fallbackVector;
+                    fallbackVector2 = fallbackVector.turnAround();
+                }
+                else {
+                    fallbackVector1 = fallbackVector.turnAround();
+                    fallbackVector2 = fallbackVector;
+                }
+            }
         }
         else if (geom1 instanceof Circle && geom2 instanceof Circle) {
             cl = this.getCollisionLine_circle_circle(geom1, geom2);
+
+            if (cl) {
+                var collisionDepth = geom1.radius + geom2.radius - geom1.center().distanceTo(geom2.center());
+
+                fallbackVector1 = Vector.fromTwoPoints(geom2.center(), geom1.center()).scaleTo(collisionDepth + 1);
+                fallbackVector2 = fallbackVector1.turnAround();
+            }
         }
         else if (geom1 instanceof LineSegment && geom2 instanceof LineSegment) {
             //TODO: implement
         }
         else {
-            throw new Error("No collision detection logic found for types of the objects specified");
+            throw new Error("No collision detection logic found for the specified types of geometry");
         }
 
         if (cl) {
             /*breaking down velocities of the objects into the two compontents: 
-            first that is parallel to collision line (axis "r") and second that is orthogonal to it (axis "q")*/
-            var r = cl;
-            var q = cl.getOrthogonalLine();
+            first that is parallel to collision line (axis "y") and second that is orthogonal to it (axis "x")*/
+            var y = cl;
+            var x = cl.getOrthogonalLine();
 
-            return {
-                objInfo1: {
-                    velocity: objInfo1.velocity.projectOnLine(r).add( objInfo1.velocity.projectOnLine(q).turnAround() )
-                },
-                objInfo2: {
-                    velocity: objInfo2.velocity.projectOnLine(r).add( objInfo2.velocity.projectOnLine(q).turnAround() )
+            //HACK: here comes the hack... na-na-na-na
+            if (geom1 instanceof Circle && geom2 instanceof Circle) {
+                var m1 = objInfo1.weight;
+                var m2 = objInfo2.weight;
+                var v1x_vect = objInfo1.velocity.projectOnLine(x);
+                var v2x_vect = objInfo2.velocity.projectOnLine(x);
+
+                var v1x = v1x_vect.modulus();
+                var v2x = v2x_vect.modulus();
+
+                if (v1x_vect.looksInDifferentDirection(x.getCollinearVector())) {
+                    v1x = -v1x;
                 }
-            };
+
+                if (v2x_vect.looksInDifferentDirection(x.getCollinearVector())) {
+                    v2x = -v2x;
+                }
+
+                var v1x_new = ((m1 - m2) * v1x + 2 * m2 * v2x) / (m1 + m2);
+                var v2x_new = (2 * m1 * v1x + (m2 - m1) * v2x) / (m1 + m2);
+
+                return {
+                    objInfo1: {
+                        fallbackVector: fallbackVector1,
+                        velocity: objInfo1.velocity.projectOnLine(y).add(x.getCollinearVector().scaleTo(v1x_new))
+                    },
+                    objInfo2: {
+                        fallbackVector: fallbackVector2,
+                        velocity: objInfo2.velocity.projectOnLine(y).add(x.getCollinearVector().scaleTo(v2x_new))
+                    }
+                };
+            }
+            else {
+                return {
+                    objInfo1: {
+                        fallbackVector: fallbackVector1,
+                        velocity: objInfo1.velocity.projectOnLine(y).add(objInfo1.velocity.projectOnLine(x).turnAround())
+                    },
+                    objInfo2: {
+                        fallbackVector: fallbackVector2,
+                        velocity: objInfo2.velocity.projectOnLine(y).add(objInfo2.velocity.projectOnLine(x).turnAround())
+                    }
+                };
+            }
         }
         else {
             return null;
@@ -177,7 +319,7 @@ CollisionManager = {
 
             if (onLineEdge) {
                 var l = new Line(closestPoint, circle.center());
-                return l.getOrthogonalLine();
+                return l.getOrthogonalLine().getParallelPassingThroughPoint(closestPoint);
             }
             else {
                 return new Line(A, B);
@@ -300,6 +442,9 @@ LineSegment = AGeometry.extend({
     },
     getLength: function () {
         return this.P1.distanceTo(this.P2);
+    },
+    getLine: function () {
+        return new Line(this.P1, this.P2);
     },
     _getCurrentPositionInfo: function () {
         return {

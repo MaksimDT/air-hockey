@@ -7,7 +7,7 @@
 //CLASS.
 GameObject = Class.extend({
     //CTOR.
-    init: function (geometry, collisionGroups, moveContext) {
+    init: function (geometry, collisionGroups, moveContext, weight) {
         assertIsDefined(geometry);
 
         this._geometry = geometry;
@@ -22,6 +22,7 @@ GameObject = Class.extend({
 
             moveContext = {
                 maxVelocity: 10,
+                minVelocity: undefined,
                 acceleration: new Vector(0, 0),
                 dampingCoeff: 1.2
             };
@@ -41,19 +42,34 @@ GameObject = Class.extend({
 
         this._collisionGroups = collisionGroups;
         this._moveContext = moveContext;
+
+        if (!weight) {
+            weight = 1;
+        }
+
+        this._weight = weight;
     },
     onTick: function () {
         var acc = this._moveContext.acceleration;
 
         if (!acc.isZeroVector()) {
-            var newVelocity = this._velocity.add(acc);
-
-            if (newVelocity.modulus() <= this._moveContext.maxVelocity) {
-                this._velocity = newVelocity;
-            }
+            this._velocity = this._velocity.add(acc);
         }
         else {
             this._velocity = this._velocity.multiplyByScalar(1 / this._moveContext.dampingCoeff);
+        }
+
+        if (this._moveContext.minVelocity) {
+            //tweaking current velocity vector so that velocity's modulus won't be under some specified value
+            var curVmodulus = this._velocity.modulus();
+
+            if (curVmodulus < this._moveContext.minVelocity) {
+                this._velocity = this._velocity.multiplyByScalar(this._moveContext.minVelocity / curVmodulus);
+            }
+        }
+
+        if (this._velocity.modulus() > this._moveContext.maxVelocity) {
+            this._velocity = this._velocity.scaleTo(this._moveContext.maxVelocity);
         }
 
         this._geometry.move(this._velocity);
@@ -84,9 +100,15 @@ GameObject = Class.extend({
         return match;
     },
     _onCollision: function (collisionInfo) {
-        this._velocity = collisionInfo.velocity;//.add(collisionInfo.otherObj._velocity.multiplyByScalar(0.2));
+        if (this._fallsBack(collisionInfo.otherObj)) {
+            this._geometry.move(collisionInfo.fallbackVector);
+        }
+        this._velocity = collisionInfo.velocity;
     },
     _reactsOnCollisions: function () {
+        return false;
+    },
+    _fallsBack: function (otherObj) {
         return false;
     }
 });
@@ -113,30 +135,30 @@ Wall = GameObject.extend({
 
 //CLASS.
 Ball = GameObject.extend({
-    init: function (initX, initY, radius, initVelocity) {
+    init: function (initX, initY, radius, initVelocity, moveContext) {
         assertIsDefined(initX);
         assertIsDefined(initY);
         assertIsDefined(radius);
         assertIsDefined(initVelocity);
 
         var geometry = new Circle(initX, initY, radius);
-        this._super(geometry, [0], {
-            dampingCoeff: 1,
-            maxVelocity: 20
-        });
+        this._super(geometry, [0], moveContext);
         this._velocity = initVelocity;
+
+        this._img = new Image(radius * 2, radius * 2);
+        this._img.src = 'ball.png';
     },
     draw: function (ctx) {
-        ctx.beginPath();
-        ctx.fillStyle = 'red';
-        ctx.arc(this._geometry.x, this._geometry.y, this._geometry.radius, 0, 2 * Math.PI, false);
-        ctx.fill();
-        ctx.closePath();
+        var g = this._geometry;
+        ctx.drawImage(this._img, g.x - g.radius, g.y - g.radius, g.radius * 2, g.radius * 2);
     },
     getCenterCoords: function () {
         return this._geometry.center();
     },
     _reactsOnCollisions: function () {
+        return true;
+    },
+    _fallsBack: function (otherObj) {
         return true;
     }
 });
@@ -152,6 +174,9 @@ Racket = GameObject.extend({
         this._super(geometry);
         this._velocity = new Vector(0, 0);
         this._ball = ball;
+
+        this._img = new Image();
+        this._img.src = 'racket.png';
     },
     onTick: function () {
         this._super();
@@ -165,13 +190,7 @@ Racket = GameObject.extend({
     draw: function (ctx) {
         var ls = this._geometry;
 
-        ctx.beginPath();
-        ctx.strokeStyle = 'black';
-        ctx.lineWidth = 5;
-        ctx.moveTo(ls.P1.x, ls.P1.y);
-        ctx.lineTo(ls.P2.x, ls.P2.y);
-        ctx.stroke();
-        ctx.closePath();
+        ctx.drawImage(this._img, ls.P1.x, ls.P1.y, this._getVisibleWidth(), this._getLength());
     },
     _onCollision: function (collisionInfo) {
         this._velocity.y = collisionInfo.velocity.y;
@@ -201,17 +220,19 @@ Racket = GameObject.extend({
     _getCenterY: function () {
         return this._geometry.getCenter().y;
     },
-    //TODO: magic numbers detected. Hacks detected too
     _goUp: function () {
         this._moveContext.dampingCoeff = 1;
-        this._moveContext.acceleration.y = -3;
+        this._moveContext.acceleration.y = -1;
     },
     _goDown: function () {
         this._moveContext.dampingCoeff = 1;
-        this._moveContext.acceleration.y = 3;
+        this._moveContext.acceleration.y = 1;
     },
     _getX: function () {
         return this._geometry.P1.x;
+    },
+    _getVisibleWidth: function () {
+        return 10;
     },
     _stop: function () {
         this._moveContext.acceleration.y = 0;
@@ -223,28 +244,29 @@ Racket = GameObject.extend({
 });
 
 Mallet = GameObject.extend({
-    init: function (initX, initY, radius) {
+    init: function (initX, initY, radius, moveContext) {
         var geometry = new Circle(initX, initY, radius);
-        this._super(geometry, [0, 1], {
-            maxVelocity: 20
-        });
+        this._super(geometry, [0, 1], moveContext, 100);
         this._velocity = new Vector(0, 0);
+
+        this._img = new Image(radius * 2, radius * 2);
+        this._img.src = 'mallet.png';
     },
     draw: function (ctx) {
-        ctx.beginPath();
-        ctx.fillStyle = 'grey';
-        ctx.arc(this._geometry.x, this._geometry.y, this._geometry.radius, 0, 2 * Math.PI, false);
-        ctx.fill();
-        ctx.closePath();
+        var g = this._geometry;
+        ctx.drawImage(this._img, g.x - g.radius, g.y - g.radius, g.radius * 2, g.radius * 2);
     },
     accelerate: function (vect) {
-        this._moveContext.acceleration = vect;
+        this._moveContext.acceleration = vect.multiplyByScalar(2);
     },
     _onCollision: function (collisionInfo) {
         this._super(collisionInfo);
     },
     _reactsOnCollisions: function () {
         return true;
+    },
+    _fallsBack: function (otherObj) {
+        return !(otherObj instanceof Ball) || otherObj.inCollision;
     }
 });
 
@@ -262,10 +284,8 @@ SeparatingWall = GameObject.extend({
 UserInputController = Class.extend({
     init: function (mallet, canvas) {
         assertIsDefined(mallet);
-        assertIsDefined(canvas);
 
         this._mallet = mallet;
-        this._canvas = canvas;
 
         this._pressedBtns = [];
         this._pressedBtns["W"] = false;
@@ -345,15 +365,20 @@ UserInputController = Class.extend({
 
 //CLASS. Represents a container for game objects
 GameField = Class.extend({
-    init: function (canvas, refreshInterval) {
+    init: function (canvas, refreshInterval, redrawFreq) {
         assertIsDefined(canvas);
         assertIsDefined(refreshInterval);
+        assertIsDefined(redrawFreq);
+        assert(redrawFreq > 0);
 
         this._drawingCtx = canvas.getContext('2d');
         this._width = canvas.width;
         this._height = canvas.height;
         this._refreshInterval = refreshInterval;
         this._canvas = canvas;
+        this._redrawFreq = redrawFreq;
+
+        this._tickCounter = 0;
     },
     start: function () {
         var self = this;
@@ -382,8 +407,17 @@ GameField = Class.extend({
         }
     },
     _initGameObjects: function () {
-        var ball = new Ball(this._width / 3, this._height / 3, this._height / 30, new Vector(15, 1));
-        var mallet = new Mallet(this._width / 3, this._height / 2, this._height / 10);
+        var ballRadius = this._height / 15;
+
+        var ball = new Ball(this._width / 3, this._height / 3, ballRadius, new Vector(15, 1), {
+            maxVelocity: ballRadius / 5,
+            minVelocity: ballRadius / 10,
+            dampingCoeff: 1
+        });
+        var mallet = new Mallet(this._width / 3, this._height / 2, this._height / 10, {
+            maxVelocity: ballRadius / 5
+        });
+        var racket = new Racket(this._width - this._width / 3, this._height / 2, this._height / 2, ball);
 
         this._gameObjects =
             [
@@ -393,12 +427,12 @@ GameField = Class.extend({
                 new Wall(0, this._height, 0, 0),
                 ball,
                 mallet,
-                new Racket(this._width - this._width / 3, this._height / 2, this._height / 2, ball)
-                //new SeparatingWall(this._width / 2, this._height)
+                racket,
+                new SeparatingWall(this._width / 2, this._height)
             ];
 
         //TODO:
-        this._controller = new UserInputController(mallet, this._canvas);
+        this._controller = new UserInputController(mallet);
     },
     _onTick: function () {
         var self = this;
@@ -406,10 +440,17 @@ GameField = Class.extend({
             gameObj.onTick();
         });
         self._processCollisions();
-        self._clearCanvas();
-        self._gameObjects.forEach(function (gameObj) {
-            gameObj.draw(self._drawingCtx);
-        });
+
+        self._tickCounter++;
+
+        if (self._tickCounter == self._redrawFreq) {
+            self._clearCanvas();
+            self._gameObjects.forEach(function (gameObj) {
+                gameObj.draw(self._drawingCtx);
+            });
+
+            self._tickCounter = 0;
+        }
     },
     _clearCanvas: function () {
         // Store the current transformation matrix
@@ -427,37 +468,40 @@ GameField = Class.extend({
             go.inCollision = false;
         });
 
-        self._gameObjects.forEach(function (go1) {
-            self._gameObjects.forEach(function (go2) {
-                if (go1 != go2 && !(go1.inCollision && go2.inCollision) && (go1.needCollisionHandling(go2) || go2.needCollisionHandling(go1))) {
+        for (var i = 0; i < self._gameObjects.length; ++i) {
+            for (var j = i + 1; j < self._gameObjects.length; ++j) {
+                var go1 = self._gameObjects[i];
+                var go2 = self._gameObjects[j];
+
+                if (go1.needCollisionHandling(go2) || go2.needCollisionHandling(go1)) {
                     var ci = CollisionManager.getCollisionInfo(
                         {
                             geometry: go1._geometry,
-                            velocity: go1._velocity
+                            velocity: go1._velocity,
+                            weight: go1._weight
                         },
                         {
                             geometry: go2._geometry,
-                            velocity: go2._velocity
+                            velocity: go2._velocity,
+                            weight: go2._weight
                         });
-                    
+
                     if (ci != null) {
                         go1._onCollision({
-                            velocity: ci.objInfo1.velocity
+                            velocity: ci.objInfo1.velocity,
+                            fallbackVector: ci.objInfo1.fallbackVector,
+                            otherObj: go2
                         });
                         go2._onCollision({
-                            velocity: ci.objInfo2.velocity
+                            velocity: ci.objInfo2.velocity,
+                            fallbackVector: ci.objInfo2.fallbackVector,
+                            otherObj: go1
                         });
                         go1.inCollision = true;
                         go2.inCollision = true;
                     }
                 }
-            });
-        });
-
-        self._gameObjects.forEach(function (go) {
-            if (go.inCollision) {
-                go.restorePrevPosition();
             }
-        });
+        }
     }
 });

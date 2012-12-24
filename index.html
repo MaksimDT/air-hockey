@@ -14,10 +14,13 @@
             canvas.width = document.width;
             canvas.height = document.height;
 
-            var gameFieldObj = new GameField(canvas, 20);
+            var gameFieldObj = new GameField(canvas, 5, 5);
             gameFieldObj.start();
         };
     </script>
+    <style type="text/css">
+        canvas { background:url(background.png); background-size: 100% auto; }
+    </style>
 </head>
 <body>
     <canvas id="gameField" style="width:100%; height:100%"></canvas>
