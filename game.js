@@ -123,14 +123,23 @@ Wall = GameObject.extend({
     onTick: function () {
         //do nothing
     }
-    //draw: function (ctx) {
-    //    ctx.strokeStyle = 'black';
-    //    ctx.beginPath();
-    //    ctx.moveTo(this._geometry.P1.x, this._geometry.P1.y);
-    //    ctx.lineTo(this._geometry.P2.x, this._geometry.P2.y);
-    //    ctx.stroke();
-    //    ctx.closePath();
-    //}
+});
+
+Net = Wall.extend({
+    init: function (x1, y1, x2, y2, onCollisionCbk, owner) {
+        this._super(x1, y1, x2, y2);
+        this._collisionGroups = [0, 3];
+        this._onCollisionCbk = onCollisionCbk;
+        this.owner = owner;
+    },
+    _onCollision: function (collisionInfo) {
+        if (collisionInfo.otherObj instanceof Ball) {
+            this._onCollisionCbk();
+        }
+    },
+    _reactsOnCollisions: function () {
+        return true;
+    }
 });
 
 //CLASS.
@@ -142,7 +151,7 @@ Ball = GameObject.extend({
         assertIsDefined(initVelocity);
 
         var geometry = new Circle(initX, initY, radius);
-        this._super(geometry, [0], moveContext);
+        this._super(geometry, [0, 3], moveContext);
         this._velocity = initVelocity;
 
         this._img = new Image(radius * 2, radius * 2);
@@ -164,7 +173,7 @@ Ball = GameObject.extend({
 });
 
 Racket = GameObject.extend({
-    init: function (x, yMiddle, height, ball, visibleWidth) {
+    init: function (x, yMiddle, height, ball, visibleWidth, moveContext) {
         assertIsDefined(x);
         assertIsDefined(yMiddle);
         assertIsDefined(height);
@@ -172,7 +181,7 @@ Racket = GameObject.extend({
         assertIsDefined(visibleWidth);
 
         var geometry = new LineSegment(new Point(x, yMiddle - height / 2), new Point(x, yMiddle + height / 2));
-        this._super(geometry);
+        this._super(geometry, [0], moveContext);
         this._velocity = new Vector(0, 0);
         this._ball = ball;
         this._visibleWidth = visibleWidth;
@@ -380,6 +389,10 @@ GameField = Class.extend({
         this._canvas = canvas;
         this._redrawFreq = redrawFreq;
 
+        this._userScore = 0;
+        this._rivalScore = 0;
+        this._maxScore = 5;
+
         this._tickCounter = 0;
     },
     start: function () {
@@ -408,7 +421,14 @@ GameField = Class.extend({
             this._controller.stopTracking();
         }
     },
+    stopAndResetScore: function () {
+        this.stop();
+        this._userScore = 0;
+        this._rivalScore = 0;
+    },
     _initGameObjects: function () {
+        var self = this;
+
         var ballRadius = this._height / 15;
 
         var ball = new Ball(this._width / 3, this._height / 3, ballRadius, new Vector(15, 1), {
@@ -419,21 +439,30 @@ GameField = Class.extend({
         var mallet = new Mallet(this._width / 3, this._height / 2, this._height / 10, {
             maxVelocity: ballRadius / 5
         });
-        var racket = new Racket(this._width - this._width / 3, this._height / 2, this._height / 2, ball, ballRadius / 2);
+        var racket = new Racket(this._width - this._width / 3, this._height / 2, this._height / 3, ball, ballRadius / 2, {
+            maxVelocity: (ballRadius / 7) * ((this._userScore + 1) / this._maxScore)
+        });
+
+        var userNet = new Net(0, this._height, 0, 0, function () {
+            self._onGoal(userNet);
+        }, 'user');
+
+        var rivalNet = new Net(this._width, 0, this._width, this._height, function () {
+            self._onGoal(rivalNet);
+        }, 'rival');
 
         this._gameObjects =
             [
                 new Wall(0, 0, this._width, 0),
-                new Wall(this._width, 0, this._width, this._height),
+                rivalNet,
                 new Wall(this._width, this._height, 0, this._height),
-                new Wall(0, this._height, 0, 0),
+                userNet,
                 ball,
                 mallet,
                 racket,
                 new SeparatingWall(this._width / 2, this._height)
             ];
 
-        //TODO:
         this._controller = new UserInputController(mallet);
     },
     _onTick: function () {
@@ -446,12 +475,7 @@ GameField = Class.extend({
         self._tickCounter++;
 
         if (self._tickCounter == self._redrawFreq) {
-            self._clearCanvas();
-            self._gameObjects.forEach(function (gameObj) {
-                gameObj.draw(self._drawingCtx);
-            });
-
-            self._tickCounter = 0;
+            self._draw();
         }
     },
     _clearCanvas: function () {
@@ -504,6 +528,39 @@ GameField = Class.extend({
                     }
                 }
             }
+        }
+    },
+    _draw: function () {
+        var self = this;
+
+        self._clearCanvas();
+        self._gameObjects.forEach(function (gameObj) {
+            gameObj.draw(self._drawingCtx);
+        });
+
+        var ctx = self._canvas.getContext('2d');
+
+        ctx.font = "normal 14px Verdana";
+        ctx.fillStyle = "red";
+        ctx.fillText(this._userScore.toString(), 10, 10);
+        ctx.fillText(this._rivalScore.toString(), this._width - 10, 10);
+
+        self._tickCounter = 0;
+    },
+    _onGoal: function (net) {
+        if (net.owner == 'user') {
+            this._rivalScore++;
+        }
+        else if (net.owner == 'rival') {
+            this._userScore++;
+        }
+
+        if (this._rivalScore == this._maxScore || this._userScore == this._maxScore) {
+            this.stopAndResetScore();
+            this.start();
+        }
+        else {
+            this.start();
         }
     }
 });
