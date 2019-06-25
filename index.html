@@ -11,8 +11,8 @@
     <script type="text/javascript">
         window.onload = function () {
             var canvas = document.getElementById('gameField');
-            canvas.width = document.width;
-            canvas.height = document.height;
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
 
             var gameFieldObj = new GameField(canvas, 10, 3);
             gameFieldObj.start();
