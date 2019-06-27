@@ -1,0 +1,33 @@
+﻿<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title>AIR HOCKEY!!!</title>
+    <script type="text/javascript">
+        isDebug = true;
+    </script>
+    <script type="text/javascript" src="utils.js"></script>
+    <script type="text/javascript" src="phys_engine.js"></script>
+    <script type="text/javascript" src="game.js"></script>
+    <script type="text/javascript" src="transport.js"></script>
+    <script type="text/javascript">
+        window.onload = function () {
+            var q = window.location.search;
+
+            var transport = new Transport("ws://localhost:5000/ws" + q, function (position) {
+                var canvas = document.getElementById('gameField');
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+
+                var gameFieldObj = new GameField(canvas, transport, position, 10, 3);
+                gameFieldObj.start();
+            });
+        };
+    </script>
+    <style type="text/css">
+        canvas { background:url(background.png); background-size: 100% auto; }
+    </style>
+</head>
+<body>
+    <canvas id="gameField" style="width:100%; height:100%"></canvas>
+</body>
+</html>

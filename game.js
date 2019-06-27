@@ -292,11 +292,13 @@ SeparatingWall = GameObject.extend({
 });
 
 //CLASS. This is a mediator between the DOM API and game's logic
-UserInputController = Class.extend({
-    init: function (mallet, canvas) {
+InputController = Class.extend({
+    init: function (mallet, transport) {
         assertIsDefined(mallet);
+        assertIsDefined(transport);
 
         this._mallet = mallet;
+        this._transport = transport;
 
         this._pressedBtns = [];
         this._pressedBtns["W"] = false;
@@ -305,6 +307,38 @@ UserInputController = Class.extend({
         this._pressedBtns["A"] = false;
 
         this._ticksPressed = 0;
+    },
+    startTracking: function () {
+    },
+    stopTracking: function () {
+    },
+    _getMalletDirection: function () {
+        var directionX = 0;
+        var directionY = 0;
+
+        if (this._pressedBtns["W"]) {
+            directionY -= 1;
+        }
+
+        if (this._pressedBtns["D"]) {
+            directionX += 1;
+        }
+
+        if (this._pressedBtns["S"]) {
+            directionY += 1;
+        }
+
+        if (this._pressedBtns["A"]) {
+            directionX -= 1;
+        }
+
+        return new Vector(directionX, directionY);
+    }
+});
+
+UserInputController = InputController.extend({
+    init: function (mallet, transport) {
+        this._super(mallet, transport);
     },
     startTracking: function () {
         var self = this;
@@ -349,40 +383,39 @@ UserInputController = Class.extend({
                 this._pressedBtns[chr] = false;
             }
         }
+
+        this._transport.send(this._pressedBtns);
+    }
+});
+
+RivalInputController = InputController.extend({
+    init: function (mallet, transport) {
+        this._super(mallet, transport);
     },
-    _getMalletDirection: function () {
-        var directionX = 0;
-        var directionY = 0;
+    startTracking: function () {
+        var self = this;
 
-        if (this._pressedBtns["W"]) {
-            directionY -= 1;
-        }
-
-        if (this._pressedBtns["D"]) {
-            directionX += 1;
-        }
-
-        if (this._pressedBtns["S"]) {
-            directionY += 1;
-        }
-
-        if (this._pressedBtns["A"]) {
-            directionX -= 1;
-        }
-
-        return new Vector(directionX, directionY);
+        this._transport.subscribe(function (btns) {
+            self._pressedBtns = btns;
+            self._mallet.accelerate(self._getMalletDirection());
+        });
+    },
+    stopTracking: function () {
+        this._transport.unsubscribe();
     }
 });
 
 //CLASS. Represents a container for game objects
 GameField = Class.extend({
-    init: function (canvas, refreshInterval, redrawFreq) {
+    init: function (canvas, transport, refreshInterval, redrawFreq) {
         assertIsDefined(canvas);
+        assertIsDefined(transport);
         assertIsDefined(refreshInterval);
         assertIsDefined(redrawFreq);
         assert(redrawFreq > 0);
 
         this._drawingCtx = canvas.getContext('2d');
+        this._transport = transport;
         this._width = canvas.width;
         this._height = canvas.height;
         this._refreshInterval = refreshInterval;
@@ -404,6 +437,7 @@ GameField = Class.extend({
         self._initGameObjects();
 
         self._controller.startTracking();
+        self._rivalController.startTracking();
 
         //..and reset timer
         self._intervalId = window.setInterval(function () {
@@ -419,6 +453,10 @@ GameField = Class.extend({
 
         if (this._controller) {
             this._controller.stopTracking();
+        }
+
+        if (this._rivalController) {
+            this._rivalController.stopTracking();
         }
     },
     stopAndResetScore: function () {
@@ -439,9 +477,13 @@ GameField = Class.extend({
         var mallet = new Mallet(this._width / 3, this._height / 2, this._height / 10, {
             maxVelocity: ballRadius / 5
         });
-        var racket = new Racket(this._width - this._width / 3, this._height / 2, this._height / 3, ball, ballRadius / 2, {
-            maxVelocity: (ballRadius / 7) * ((this._userScore + 1) / this._maxScore)
+
+        var rivalMallet = new Mallet(this._width - this._width / 3, this._height / 2, this._height / 10, {
+            maxVelocity: ballRadius / 5
         });
+        // var racket = new Racket(this._width - this._width / 3, this._height / 2, this._height / 3, ball, ballRadius / 2, {
+        //     maxVelocity: (ballRadius / 7) * ((this._userScore + 1) / this._maxScore)
+        // });
 
         var userNet = new Net(0, this._height, 0, 0, function () {
             self._onGoal(userNet);
@@ -459,11 +501,12 @@ GameField = Class.extend({
                 userNet,
                 ball,
                 mallet,
-                racket,
+                rivalMallet,
                 new SeparatingWall(this._width / 2, this._height)
             ];
 
-        this._controller = new UserInputController(mallet);
+        this._controller = new UserInputController(mallet, this._transport);
+        this._rivalController = new RivalInputController(mallet, this._transport);
     },
     _onTick: function () {
         var self = this;
