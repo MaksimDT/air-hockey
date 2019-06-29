@@ -457,9 +457,9 @@ GameField = Class.extend({
             this._controller.stopTracking();
         }
 
-        if (this._rivalController) {
-            this._rivalController.stopTracking();
-        }
+        //if (this._rivalController) {
+        //    this._rivalController.stopTracking();
+        //}
     },
     stopAndResetScore: function () {
         this.stop();
@@ -518,7 +518,7 @@ GameField = Class.extend({
             ];
 
         this._controller = new UserInputController(mallet, this._transport);
-        this._rivalController = new RivalInputController(mallet, this._transport);
+        this._rivalController = new RivalInputController(rivalMallet, this._transport);
     },
     _onTick: function () {
         var self = this;
