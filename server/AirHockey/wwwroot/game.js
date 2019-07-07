@@ -172,88 +172,6 @@ Ball = GameObject.extend({
     }
 });
 
-Racket = GameObject.extend({
-    init: function (x, yMiddle, height, ball, visibleWidth, moveContext) {
-        assertIsDefined(x);
-        assertIsDefined(yMiddle);
-        assertIsDefined(height);
-        assertIsDefined(ball);
-        assertIsDefined(visibleWidth);
-
-        var geometry = new LineSegment(new Point(x, yMiddle - height / 2), new Point(x, yMiddle + height / 2));
-        this._super(geometry, [0], moveContext);
-        this._velocity = new Vector(0, 0);
-        this._ball = ball;
-        this._visibleWidth = visibleWidth;
-
-        this._img = new Image();
-        this._img.src = 'racket.png';
-    },
-    onTick: function () {
-        this._super();
-        if (!this.inCollision) {
-            this._trackBall();
-        }
-        else {
-            this._stop();
-        }
-    },
-    draw: function (ctx) {
-        var ls = this._geometry;
-
-        ctx.drawImage(this._img, ls.P1.x, ls.P1.y, this._getVisibleWidth(), this._getLength());
-    },
-    _onCollision: function (collisionInfo) {
-        this._velocity.y = collisionInfo.velocity.y;
-    },
-    _trackBall: function () {
-        var ballCenter = this._ball.getCenterCoords();
-        var needToTrack = ballCenter.x < this._getX();
-
-        if (needToTrack) {
-            if (this._getCenterY() - ballCenter.y > this._getLength() / 3) {
-                this._goUp();
-            }
-            else if (ballCenter.y - this._getCenterY() > this._getLength() / 3) {
-                this._goDown();
-            }
-            else {
-                this._stop();
-            }
-        }
-        else {
-            this._stop();
-        }
-    },
-    _getLength: function () {
-        return this._geometry.getLength();
-    },
-    _getCenterY: function () {
-        return this._geometry.getCenter().y;
-    },
-    _goUp: function () {
-        this._moveContext.dampingCoeff = 1;
-        this._moveContext.acceleration.y = -1;
-    },
-    _goDown: function () {
-        this._moveContext.dampingCoeff = 1;
-        this._moveContext.acceleration.y = 1;
-    },
-    _getX: function () {
-        return this._geometry.P1.x;
-    },
-    _getVisibleWidth: function () {
-        return this._visibleWidth;
-    },
-    _stop: function () {
-        this._moveContext.acceleration.y = 0;
-        this._moveContext.dampingCoeff = 10;
-    },
-    _reactsOnCollisions: function () {
-        return true;
-    }
-});
-
 Mallet = GameObject.extend({
     init: function (initX, initY, radius, moveContext) {
         var geometry = new Circle(initX, initY, radius);
@@ -346,7 +264,7 @@ UserInputController = InputController.extend({
         document.onkeydown = function (event) {
             self._refreshPressedBtnsArray(event.keyCode, 'keydown');
             self._mallet.accelerate(self._getMalletDirection());
-        }
+        };
 
         document.onkeyup = function (event) {
             self._refreshPressedBtnsArray(event.keyCode, 'keyup');
@@ -490,9 +408,6 @@ GameField = Class.extend({
         var rivalMallet = new Mallet(rivalX, this._height / 2, this._height / 10, {
             maxVelocity: ballRadius / 5
         });
-        // var racket = new Racket(this._width - this._width / 3, this._height / 2, this._height / 3, ball, ballRadius / 2, {
-        //     maxVelocity: (ballRadius / 7) * ((this._userScore + 1) / this._maxScore)
-        // });
 
         var userNetX = (this._position == "left" ? 0 : this._width);
         var rivalNetX = (this._position == "left" ? this._width : 0);
@@ -610,12 +525,12 @@ GameField = Class.extend({
             this._userScore++;
         }
 
-        if (this._rivalScore == this._maxScore || this._userScore == this._maxScore) {
+        /*if (this._rivalScore == this._maxScore || this._userScore == this._maxScore) {
             this.stopAndResetScore();
             this.start();
         }
         else {
             this.start();
-        }
+        }*/
     }
 });

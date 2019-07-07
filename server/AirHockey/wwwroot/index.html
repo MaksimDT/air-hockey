@@ -13,7 +13,7 @@
         window.onload = function () {
             var q = window.location.search;
 
-            var transport = new Transport("ws://localhost:5000/ws" + q, function (position) {
+            var transport = new Transport("ws://192.168.0.7:8080/ws" + q, function (position) {
                 var canvas = document.getElementById('gameField');
                 canvas.width = window.innerWidth;
                 canvas.height = window.innerHeight;
