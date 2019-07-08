@@ -39,5 +39,23 @@ namespace AirHockey.Engine.Geometry
             P1 = P1.AddVector(v);
             P2 = P2.AddVector(v);
         }
+
+        public override CollisionGeometry GetCollisionGeometry(IGeometry other)
+        {
+            if (other is Circle)
+            {
+                var cg = other.GetCollisionGeometry(this);
+                return cg?.Flip();
+            }
+            else if (other is LineSegment)
+            {
+                // TODO: implement line-line collision detection
+                return null;
+            }
+            else
+            {
+                throw new NotImplementedException();
+            }
+        }
     }
 }

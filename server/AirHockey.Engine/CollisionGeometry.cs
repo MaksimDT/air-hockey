@@ -9,16 +9,21 @@ namespace AirHockey.Engine
     {
         public CollisionGeometry(
             Line collisionLine, 
-            (IGeometry geom, Vector fallback) first, 
-            (IGeometry geom, Vector fallback) second)
+            Vector fallback1, 
+            Vector fallback2)
         {
             CollisionLine = collisionLine;
-            First = first;
-            Second = second;
+            Fallback1 = fallback1;
+            Fallback2 = fallback2;
         }
 
         public Line CollisionLine { get; }
-        public (IGeometry Geometry, Vector Fallback) First { get; }
-        public (IGeometry Geometry, Vector Fallback) Second { get; }
+        public Vector Fallback1 { get; }
+        public Vector Fallback2 { get; }
+
+        public CollisionGeometry Flip()
+        {
+            return new CollisionGeometry(CollisionLine, Fallback2, Fallback1);
+        }
     }
 }

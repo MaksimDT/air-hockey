@@ -9,7 +9,8 @@ namespace AirHockey.Engine
     {
         IGeometry Geometry { get; }
         Vector Velocity { get; }
-        (CollisionInfo ci1, CollisionInfo ci2) GetCollisionInfo(IGameObject other);
+        int Weight { get; }
+        CollisionInfo GetCollisionInfo(IGameObject other);
     }
 
     public abstract class GameObject<TGeometry, TPosition> : IGameObject
@@ -17,20 +18,23 @@ namespace AirHockey.Engine
     {
         public TGeometry Geometry { get; }
         public Vector Velocity { get; }
+        public int Weight { get; }
+
         IGeometry IGameObject.Geometry => Geometry;
 
-        public GameObject(TGeometry geometry, Vector velocity)
+        public GameObject(TGeometry geometry, Vector velocity, int weight = 1)
         {
             Geometry = geometry;
             Velocity = velocity;
+            Weight = weight;
         }
 
-        public (CollisionInfo ci1, CollisionInfo ci2) GetCollisionInfo(IGameObject other)
+        public CollisionInfo GetCollisionInfo(IGameObject other)
         {
             var cg = Geometry.GetCollisionGeometry(other.Geometry);
             if (cg == null)
             {
-                return (null, null);
+                return null;
             }
 
             // breaking down velocities of the objects into two compontents: 
@@ -39,32 +43,41 @@ namespace AirHockey.Engine
             var y = cg.CollisionLine;
             var x = y.GetOrthogonalLine();
 
-            // HACK: special handling of Circle-Line collisions
-            var geom1 = cg.First.Geometry;
-            var geom2 = cg.Second.Geometry;
+            // HACK: special handling for circles...
+            if (Geometry is Circle && other.Geometry is Circle)
+            {
+                var m1 = Weight;
+                var m2 = other.Weight;
+                var v1x_vect = Velocity.ProjectOn(x);
+                var v2x_vect = Velocity.ProjectOn(x);
 
-            if (geom1 is Circle c && geom2 is LineSegment l)
-            {
-                return HandleCircleLineCollision(c, l);
-            }
-            else if (geom1 is LineSegment l1 && geom2 is Circle c1)
-            {
-                return HandleCircleLineCollision(c1, l1);
+                var v1x = v1x_vect.Modulus;
+                var v2x = v2x_vect.Modulus;
+
+                if (v1x_vect.LooksInDifferentDirection(x.GetCollinearVector()))
+                {
+                    v1x = -v1x;
+                }
+
+                if (v2x_vect.LooksInDifferentDirection(x.GetCollinearVector()))
+                {
+                    v2x = -v2x;
+                }
+
+                var v1x_new = ((m1 - m2) * v1x + 2 * m2 * v2x) / (m1 + m2);
+                var v2x_new = (2 * m1 * v1x + (m2 - m1) * v2x) / (m1 + m2);
+
+                var velocity1 = Velocity.ProjectOn(y).Add(x.GetCollinearVector().ScaleTo(v1x_new));
+                var velocity2 = Velocity.ProjectOn(y).Add(x.GetCollinearVector().ScaleTo(v2x_new));
+
+                return new CollisionInfo(cg.Fallback1, velocity1, cg.Fallback2, velocity2);
             }
             else
             {
                 var velocity1 = Velocity.ProjectOn(y).Add(Velocity.ProjectOn(x).TurnAround());
                 var velocity2 = other.Velocity.ProjectOn(y).Add(Velocity.ProjectOn(x).TurnAround());
-                var ci1 = new CollisionInfo(this, cg.First.Fallback, velocity1);
-                var ci2 = new CollisionInfo(other, cg.Second.Fallback, velocity2);
-
-                return (ci1, ci2);
+                return new CollisionInfo(cg.Fallback1, velocity1, cg.Fallback2, velocity2);
             }
-        }
-
-        private (CollisionInfo ci1, CollisionInfo ci2) HandleCircleLineCollision(Circle circle, LineSegment line)
-        {
-
         }
     }
 }

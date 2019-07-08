@@ -7,17 +7,22 @@ namespace AirHockey.Engine
 {
     public class CollisionInfo
     {
-        public CollisionInfo(IGameObject go, Vector fallback, Vector velocity)
+        public Vector Fallback1 { get; }
+        public Vector Velocity1 { get; }
+        public Vector Fallback2 { get; }
+        public Vector Velocity2 { get; }
+
+        public CollisionInfo(Vector fallback1, Vector velocity1, Vector fallback2, Vector velocity2)
         {
-            GameObject = go;
-            FallbackVector = fallback;
-            Velocity = velocity;
+            Fallback1 = fallback1;
+            Velocity1 = velocity1;
+            Fallback2 = fallback2;
+            Velocity2 = velocity2;
         }
 
-        public IGameObject GameObject { get; }
-
-        public Vector FallbackVector { get; }
-
-        public Vector Velocity { get; }
+        public CollisionInfo Flip()
+        {
+            return new CollisionInfo(Fallback2, Velocity2, Fallback1, Velocity1);
+        }
     }
 }
