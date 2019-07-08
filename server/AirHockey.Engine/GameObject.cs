@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Linq;
 
 namespace AirHockey.Engine
 {
@@ -11,21 +12,40 @@ namespace AirHockey.Engine
         Vector Velocity { get; }
         int Weight { get; }
         CollisionInfo GetCollisionInfo(IGameObject other);
+        ISet<int> CollisionGroups { get; }
     }
 
     public abstract class GameObject<TGeometry, TPosition> : IGameObject
         where TGeometry : GeometryBase<TPosition>
     {
         public TGeometry Geometry { get; }
-        public Vector Velocity { get; }
+        public Vector Velocity { get; private set; }
+        public MoveContext MoveCtx { get; }
+        public ISet<int> CollisionGroups { get; }
         public int Weight { get; }
+
+        protected bool ReactsToCollisions => false;
 
         IGeometry IGameObject.Geometry => Geometry;
 
-        public GameObject(TGeometry geometry, Vector velocity, int weight = 1)
+        public GameObject(
+            TGeometry geometry, 
+            Vector velocity, 
+            MoveContext moveCtx, 
+            IEnumerable<int> collisionGroups, 
+            int weight = 1)
         {
             Geometry = geometry;
             Velocity = velocity;
+            MoveCtx = moveCtx;
+            if (collisionGroups != null)
+            {
+                CollisionGroups = new HashSet<int>(collisionGroups);
+            }
+            else
+            {
+                CollisionGroups = new HashSet<int>();
+            }
             Weight = weight;
         }
 
@@ -79,5 +99,42 @@ namespace AirHockey.Engine
                 return new CollisionInfo(cg.Fallback1, velocity1, cg.Fallback2, velocity2);
             }
         }
+
+        public void OnTick()
+        {
+            var acc = MoveCtx.Acceleration;
+
+            if (!acc.IsZeroVector)
+            {
+                Velocity = Velocity.Add(acc);
+            }
+            else
+            {
+                Velocity = Velocity.MultiplyByScalar(1 / MoveCtx.DampingCoeff);
+            }
+
+            if (Velocity.Modulus < MoveCtx.MinVelocity)
+            {
+                Velocity = Velocity.ScaleTo(MoveCtx.MinVelocity);
+            }
+
+            Geometry.Move(Velocity);
+        }
+
+        public bool NeedsCollisionHandling(IGameObject other)
+        {
+            return CollisionGroups.Overlaps(other.CollisionGroups);
+        }
+
+        public virtual void OnCollision(IGameObject other, Vector fallback, Vector velocity)
+        {
+            if (FallsBack(other))
+            {
+                Geometry.Move(fallback);
+            }
+            Velocity = velocity;
+        }
+
+        protected virtual bool FallsBack(IGameObject other) => false;
     }
 }

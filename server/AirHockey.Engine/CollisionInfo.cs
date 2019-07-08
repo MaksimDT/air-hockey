@@ -12,7 +12,11 @@ namespace AirHockey.Engine
         public Vector Fallback2 { get; }
         public Vector Velocity2 { get; }
 
-        public CollisionInfo(Vector fallback1, Vector velocity1, Vector fallback2, Vector velocity2)
+        public CollisionInfo(
+            Vector fallback1, 
+            Vector velocity1, 
+            Vector fallback2, 
+            Vector velocity2)
         {
             Fallback1 = fallback1;
             Velocity1 = velocity1;
