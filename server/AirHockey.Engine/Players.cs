@@ -4,8 +4,8 @@ using System.Text;
 
 namespace AirHockey.Engine
 {
-    public class Game
+    public class Players
     {
-
+        public Dictionary<string, Player> CurrentPlayers { get; set; }
     }
 }

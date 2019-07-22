@@ -23,6 +23,7 @@ namespace AirHockey.Engine.Geometry
         {
             return new Vector(p2.X - p1.X, p2.Y - p1.Y);
         }
+        public static Vector Zero { get; } = new Vector(0, 0);
 
         public Vector ProjectOn(Vector v)
         {

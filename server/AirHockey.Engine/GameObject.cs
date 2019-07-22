@@ -13,6 +13,7 @@ namespace AirHockey.Engine
         int Weight { get; }
         CollisionInfo GetCollisionInfo(IGameObject other);
         ISet<int> CollisionGroups { get; }
+        bool InCollision { get; set; }
     }
 
     public abstract class GameObject<TGeometry, TPosition> : IGameObject
@@ -23,8 +24,7 @@ namespace AirHockey.Engine
         public MoveContext MoveCtx { get; }
         public ISet<int> CollisionGroups { get; }
         public int Weight { get; }
-
-        protected bool ReactsToCollisions => false;
+        public bool InCollision { get; set; }
 
         IGeometry IGameObject.Geometry => Geometry;
 
